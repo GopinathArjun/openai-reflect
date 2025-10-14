@@ -1,3 +1,21 @@
+Updated Instructions (Oct 14, 2025)
+The original instructions from OpenAI seem to be outdated, and there was a lot of trial and error for me. Thought i will write something up for my reference in future. kept OpenAI's stuff here for future reference 
+
+1. cloned to my own device. i used github desktop
+2. remember to keep esp-idf activated. made that mistake previously. the download steps given in openai segment are correct for esp-idf.
+3. IMPORTANT: run idf.py menuconfig
+In the menu, navigate to Reflect Configuration and enter Wi-Fi SSID, Wi-Fi Password, and  API key
+(I can also add them in sdkconfig files (search for gpt-realtime-mini, you will end up the right place) and then run idf.py build again. I prefer this approach as it is easier.)
+
+4. idf.py flash 
+(I prefer runnin "idf.py flash monitor | tee YYYYMMDD_HHMM_Logs.txt" for me to see whats going on)
+
+> dont connnect m5stack with hub, make sure it is connected via macbook's usb c port. 
+> run ls /dev/tty.* if the port is not shown. my device shows up as /dev/tty.usbmodem1101
+> then run idf.py flash -p /dev/tty.usbmodem1101
+
+seeing a lot of compiler warnings too. not sure how to tackle them now. but atleast it worked as require
+**** END OF MY COMMENTS *****
 > [!CAUTION]
 > This is a demo/hackathon project. This code is provided *as-is* without any warranty or guarantees.
 > It has not been extensively reviewed for security, reliability, or fitness for any purpose.
