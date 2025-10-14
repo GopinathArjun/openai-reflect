@@ -1,6 +1,7 @@
 #include <atomic>
 #include <bsp/esp-bsp.h>
 #include <opus.h>
+#include <esp_log.h>
 
 #include "reflect.hpp"
 
@@ -15,6 +16,8 @@
 #define OPUS_BUFFER_SIZE 1276
 #define OPUS_ENCODER_BITRATE 30000
 #define OPUS_ENCODER_COMPLEXITY 0
+
+static const char* LOG_TAG = "audio";
 
 esp_codec_dev_sample_info_t fs = {
     .bits_per_sample = BITS_PER_SAMPLE,
@@ -120,6 +123,7 @@ void reflect_send_audio(PeerConnection *peer_connection, bool is_muted) {
                                   PCM_BUFFER_SIZE / sizeof(uint16_t),
                                   encoder_output_buffer, OPUS_BUFFER_SIZE);
   assert(encoded_size > 0);
+  ESP_LOGI(LOG_TAG, " Sending audio packet to oai (size: %d bytes)", encoded_size);/
   peer_connection_send_audio(peer_connection, encoder_output_buffer,
                              encoded_size);
 }

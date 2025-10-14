@@ -2,7 +2,7 @@
 #include <string>
 #include <vector>
 
-#include "reflect.hpp"
+#include "reflect.hpp" 
 
 #define LOG_TAG "realtimeapi"
 
@@ -49,6 +49,7 @@ Use these as decisive defaults when the user gives vibes/feelings without specif
 - “ocean”: `H≈35000–43000`, `S=55000`, `B=35000`
 - “forest”: `H≈20000–26000`, `S=50000`, `B=35000`
 - “romantic”: `H≈56000 (pink)`, `S=50000`, `B=22000`
+- "sunrise": `H=8500`, `S=65535`, `B=65535`
 (Compute `H` using the degree→16-bit formula when you reason in degrees.)
 
 # TOOLING POLICY (MANDATORY)
@@ -189,6 +190,7 @@ void send_session_update(PeerConnection *peer_connection) {
 }
 
 void realtimeapi_parse_incoming(char *msg) {
+  ESP_LOGI(LOG_TAG, "got json from oai: %s", msg);
   // Large inbound messages get chunked (and fail to parse)
   auto root = cJSON_Parse(msg);
   if (root == nullptr) {
