@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <esp_log.h>
 
 #define BROADCAST_IP "255.255.255.255"
 #define LIFX_PORT 56700
@@ -65,8 +66,8 @@ int lifx_socket = 0;
 struct sockaddr_in lifx_addr;
 
 void send_lifx_pkt(void *pkt, int size) {
-  sendto(lifx_socket, pkt, size, 0, (struct sockaddr *)&lifx_addr,
-         sizeof(lifx_addr));
+  int result = sendto(lifx_socket, pkt, size, 0, (struct sockaddr *)&lifx_addr, sizeof(lifx_addr));
+  ESP_LOGI("lifx", "Sent %d bytes, results %d", size, result);
 }
 
 void send_lifx_set_color(uint16_t hue, uint16_t saturation, uint16_t brightness,
@@ -159,11 +160,11 @@ void reflect_lifx() {
   }
 
   int broadcast = 1;
-  if (setsockopt(lifx_socket, SOL_SOCKET, SO_BROADCAST, &broadcast,
-                 sizeof(broadcast)) < 0) {
+  if (setsockopt(lifx_socket, SOL_SOCKET, SO_BROADCAST, &broadcast, sizeof(broadcast)) < 0) {
     return;
   }
 
   inet_pton(AF_INET, BROADCAST_IP, &lifx_addr.sin_addr);
-  send_lifx_set_power(false, 5000);
+  send_lifx_set_power(true, 7000);
+  send_lifx_set_color(9500, 65535, 65535, 3500,7000);
 }
