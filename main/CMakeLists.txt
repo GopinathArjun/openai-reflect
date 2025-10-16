@@ -4,7 +4,8 @@ file(GLOB SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 
 idf_component_register(SRCS ${SOURCES}
                        PRIV_REQUIRES spi_flash nvs_flash esp_wifi esp_lcd_touch peer esp_http_client
-                       INCLUDE_DIRS ".")
+                       INCLUDE_DIRS "."
+                       EMBED_FILES "oai_instructions.txt")
 
 idf_component_get_property(lib sepfy__srtp COMPONENT_LIB)
 target_compile_options(${lib} PRIVATE -Wno-error=incompatible-pointer-types)
