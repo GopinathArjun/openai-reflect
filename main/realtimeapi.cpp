@@ -130,7 +130,7 @@ void send_session_update(PeerConnection *peer_connection) {
 }
 
 void realtimeapi_parse_incoming(char *msg) {
-  ESP_LOGI(LOG_TAG, "got json from oai: %s", msg);
+  //ESP_LOGI(LOG_TAG, "got json from oai: %s", msg);
   // Large inbound messages get chunked (and fail to parse)
   auto root = cJSON_Parse(msg);
   if (root == nullptr) {

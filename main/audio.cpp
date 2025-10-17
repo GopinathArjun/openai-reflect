@@ -123,7 +123,7 @@ void reflect_send_audio(PeerConnection *peer_connection, bool is_muted) {
                                   PCM_BUFFER_SIZE / sizeof(uint16_t),
                                   encoder_output_buffer, OPUS_BUFFER_SIZE);
   assert(encoded_size > 0);
-  ESP_LOGI(LOG_TAG, " Sending audio packet to oai (size: %d bytes)", encoded_size);/
+  //ESP_LOGI(LOG_TAG, " Sending audio packet to oai (size: %d bytes)", encoded_size);
   peer_connection_send_audio(peer_connection, encoder_output_buffer,
                              encoded_size);
 }
