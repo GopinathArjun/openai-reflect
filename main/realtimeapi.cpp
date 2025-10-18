@@ -98,6 +98,50 @@ void add_set_color(cJSON *tools) {
   assert(cJSON_AddItemToArray(tools, tool));
 }
 
+void add_set_waveform(cJSON *tools) {
+  auto tool = cJSON_CreateObject();
+  assert(tool != nullptr);
+
+  assert(cJSON_AddStringToObject(tool, "type", "function") != nullptr);
+  assert(cJSON_AddStringToObject(tool, "name", "set_waveform") != nullptr);
+  assert(cJSON_AddStringToObject(
+             tool, "description",
+             "LAN SetWaveform (103). Modulate HSBK values over time with a waveform.") != nullptr);
+
+  auto parameters = cJSON_CreateObject();
+  assert(parameters != nullptr);
+  assert(cJSON_AddItemToObject(tool, "parameters", parameters));
+  assert(cJSON_AddStringToObject(parameters, "type", "object") != nullptr);
+
+  auto properties = cJSON_AddObjectToObject(parameters, "properties");
+  assert(properties != nullptr);
+
+  // Add transient parameter
+  auto transient = cJSON_AddObjectToObject(properties, "transient");
+  assert(transient != nullptr);
+  assert(cJSON_AddStringToObject(transient, "type", "boolean") != nullptr);
+  assert(cJSON_AddStringToObject(transient, "description", "If true, light returns to original color after effect. SINE/TRIANGLE always return.") != nullptr);
+
+  // Add HSBK and period/cycles parameters
+  add_number_parameter(properties, "hue", "Target hue", 0, 0, 65535);
+  add_number_parameter(properties, "saturation", "Target saturation", 0, 0, 65535);
+  add_number_parameter(properties, "brightness", "Target brightness", 0, 0, 65535);
+  add_number_parameter(properties, "kelvin", "Target kelvin", 3500, 1500, 9000);
+  add_number_parameter(properties, "period", "Duration of one cycle in milliseconds", 1000, 0, 4294967295);
+  add_number_parameter(properties, "cycles", "Number of cycles to repeat", 1, 0, 100);
+  
+  // Add skew_ratio for PULSE waveform
+  add_number_parameter(properties, "skew_ratio", "For PULSE only. Defines duty cycle. Scaled from 0 to 1 as -32768 to 32767.", 0, -32768, 32767);
+  
+  // Add waveform type
+  add_number_parameter(properties, "waveform", "Shape of the wave. 0:SAW, 1:SINE, 2:HALF_SINE, 3:TRIANGLE, 4:PULSE", 1, 0, 4);
+  
+  set_required_parameters(
+      parameters, std::vector<std::string>{"transient", "hue", "saturation", "brightness", "kelvin", "period", "cycles", "waveform"});
+
+  assert(cJSON_AddItemToArray(tools, tool));
+}
+
 void send_session_update(PeerConnection *peer_connection) {
   std:: string kLunaInstructions(
     reinterpret_cast<const char*>(_binary_oai_instructions_txt_start),_binary_oai_instructions_txt_end - _binary_oai_instructions_txt_start);
@@ -118,6 +162,7 @@ void send_session_update(PeerConnection *peer_connection) {
 
   add_set_light_power(tools);
   add_set_color(tools);
+  add_set_waveform(tools);
 
   assert(cJSON_AddItemToObject(root, "session", session));
 
@@ -202,6 +247,66 @@ void realtimeapi_parse_incoming(char *msg) {
   } else if (strcmp(output_name_item->valuestring, "set_light_power") == 0) {
     ESP_LOGI(LOG_TAG, "set_light_power on(%d) duration(%d)", on, duration);
     send_lifx_set_power(on, duration);
+  } else if (strcmp(output_name_item->valuestring, "set_waveform")==0){
+    ESP_LOGI(LOG_TAG, "set_waveform call received");
+
+    bool transient = false;
+    auto transientObj = cJSON_GetObjectItem(args, "transient");
+    if (transientObj != nullptr) {
+      transient = cJSON_IsTrue(transientObj);
+    }
+
+    uint16_t hue = 0;
+    auto hueObj = cJSON_GetObjectItem(args, "hue");
+    if (hueObj != nullptr) {
+      hue = hueObj->valueint;
+    }
+    
+    uint16_t saturation = 0;
+    auto saturationObj = cJSON_GetObjectItem(args, "saturation");
+    if (saturationObj != nullptr) {
+      saturation = saturationObj->valueint;
+    }
+    
+    uint16_t brightness = 0;
+    auto brightnessObj = cJSON_GetObjectItem(args, "brightness");
+    if (brightnessObj != nullptr) {
+      brightness = brightnessObj->valueint;
+    }
+    
+    uint16_t kelvin = 3500; 
+    auto kelvinObj = cJSON_GetObjectItem(args, "kelvin");
+    if (kelvinObj != nullptr) {
+      kelvin = kelvinObj->valueint;
+    }
+    
+    uint32_t period = 1000; 
+    auto periodObj = cJSON_GetObjectItem(args, "period");
+    if (periodObj != nullptr) {
+      period = periodObj->valueint;
+    }
+    
+    float cycles = 1.0f; 
+    auto cyclesObj = cJSON_GetObjectItem(args, "cycles");
+    if (cyclesObj != nullptr) {
+      cycles = (float)cyclesObj->valuedouble;
+    }
+
+    int16_t skew_ratio = 0; 
+    auto skew_ratioObj = cJSON_GetObjectItem(args, "skew_ratio");
+    if (skew_ratioObj != nullptr) {
+      skew_ratio = skew_ratioObj->valueint;
+    }
+    
+    uint8_t waveform = 1;
+    auto waveformObj = cJSON_GetObjectItem(args, "waveform");
+    if (waveformObj != nullptr) {
+      waveform = waveformObj->valueint;
+    }
+
+    ESP_LOGI(LOG_TAG, "Executing waveform: type(%d) period(%d) cycles(%.1f)", waveform, period, cycles);
+
+    send_lifx_set_waveform(transient, hue, saturation, brightness, kelvin, period, cycles, skew_ratio, waveform);
   }
 
   cJSON_Delete(args);
