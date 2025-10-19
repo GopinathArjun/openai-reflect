@@ -1,12 +1,45 @@
 #include "cJSON.h"
 #include <string>
 #include <vector>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 #include "reflect.hpp" 
 
 #define LOG_TAG "realtimeapi"
 extern const uint8_t _binary_oai_instructions_txt_start[] asm("_binary_oai_instructions_txt_start");
 extern const uint8_t _binary_oai_instructions_txt_end[] asm("_binary_oai_instructions_txt_end");
+
+typedef struct {
+    uint16_t hue;
+    uint16_t saturation;
+} firecracker_params_t;
+
+void firecracker_task(void *params) {
+    firecracker_params_t *p = (firecracker_params_t *)params;
+
+    ESP_LOGI(LOG_TAG, "Firecracker Task: 1. Launching...");
+    send_lifx_set_waveform(false, p->hue, p->saturation, 65535, 3500, 1500, 1.0, 0, 0); 
+    vTaskDelay(pdMS_TO_TICKS(1500)); 
+
+    ESP_LOGI(LOG_TAG, "Firecracker Task: 2. Explosion!");
+    send_lifx_set_color(0, 0, 65535, 5500, 100);
+    vTaskDelay(pdMS_TO_TICKS(100)); 
+
+    ESP_LOGI(LOG_TAG, "Firecracker Task: 3. Embers...");
+    send_lifx_set_color(0, 65535, 15000, 3500, 4000);
+  
+    free(p);
+    vTaskDelete(NULL);
+}
+
+void reflect_start_firecracker_task(uint16_t hue, uint16_t saturation) {
+    firecracker_params_t *params = (firecracker_params_t *)malloc(sizeof(firecracker_params_t));
+    params->hue = hue;
+    params->saturation = saturation;
+
+    xTaskCreate(firecracker_task, "firecracker_task", 4096, params, 5, NULL);
+}
 
 void set_required_parameters(cJSON *parameters,
                              std::vector<std::string> params) {
@@ -116,13 +149,11 @@ void add_set_waveform(cJSON *tools) {
   auto properties = cJSON_AddObjectToObject(parameters, "properties");
   assert(properties != nullptr);
 
-  // Add transient parameter
   auto transient = cJSON_AddObjectToObject(properties, "transient");
   assert(transient != nullptr);
   assert(cJSON_AddStringToObject(transient, "type", "boolean") != nullptr);
   assert(cJSON_AddStringToObject(transient, "description", "If true, light returns to original color after effect. SINE/TRIANGLE always return.") != nullptr);
 
-  // Add HSBK and period/cycles parameters
   add_number_parameter(properties, "hue", "Target hue", 0, 0, 65535);
   add_number_parameter(properties, "saturation", "Target saturation", 0, 0, 65535);
   add_number_parameter(properties, "brightness", "Target brightness", 0, 0, 65535);
@@ -130,15 +161,37 @@ void add_set_waveform(cJSON *tools) {
   add_number_parameter(properties, "period", "Duration of one cycle in milliseconds", 1000, 0, 4294967295);
   add_number_parameter(properties, "cycles", "Number of cycles to repeat", 1, 0, 100);
   
-  // Add skew_ratio for PULSE waveform
   add_number_parameter(properties, "skew_ratio", "For PULSE only. Defines duty cycle. Scaled from 0 to 1 as -32768 to 32767.", 0, -32768, 32767);
   
-  // Add waveform type
   add_number_parameter(properties, "waveform", "Shape of the wave. 0:SAW, 1:SINE, 2:HALF_SINE, 3:TRIANGLE, 4:PULSE", 1, 0, 4);
   
   set_required_parameters(
       parameters, std::vector<std::string>{"transient", "hue", "saturation", "brightness", "kelvin", "period", "cycles", "waveform"});
 
+  assert(cJSON_AddItemToArray(tools, tool));
+}
+
+void add_run_firecracker(cJSON *tools) {
+  auto tool = cJSON_CreateObject();
+  assert(tool != nullptr);
+
+  assert(cJSON_AddStringToObject(tool, "type", "function") != nullptr);
+  assert(cJSON_AddStringToObject(tool, "name", "run_firecracker") != nullptr);
+  assert(cJSON_AddStringToObject(
+             tool, "description",
+             "Runs a pre-programmed firecracker lighting sequence on the device.") != nullptr);
+  
+  auto parameters = cJSON_CreateObject();
+  assert(parameters != nullptr);
+  assert(cJSON_AddItemToObject(tool, "parameters", parameters));
+  assert(cJSON_AddStringToObject(parameters, "type", "object") != nullptr);
+
+  auto properties = cJSON_AddObjectToObject(parameters, "properties");
+  assert(properties != nullptr);
+
+  add_number_parameter(properties, "hue", "Optional hue for the firecracker launch color.", 10923, 0, 65535);
+  add_number_parameter(properties, "saturation", "Optional saturation for the launch color.", 65535, 0, 65535);
+  
   assert(cJSON_AddItemToArray(tools, tool));
 }
 
@@ -163,6 +216,7 @@ void send_session_update(PeerConnection *peer_connection) {
   add_set_light_power(tools);
   add_set_color(tools);
   add_set_waveform(tools);
+  add_run_firecracker(tools);
 
   assert(cJSON_AddItemToObject(root, "session", session));
 
@@ -175,7 +229,6 @@ void send_session_update(PeerConnection *peer_connection) {
 }
 
 void realtimeapi_parse_incoming(char *msg) {
-  //ESP_LOGI(LOG_TAG, "got json from oai: %s", msg);
   // Large inbound messages get chunked (and fail to parse)
   auto root = cJSON_Parse(msg);
   if (root == nullptr) {
@@ -307,7 +360,27 @@ void realtimeapi_parse_incoming(char *msg) {
     ESP_LOGI(LOG_TAG, "Executing waveform: type(%d) period(%d) cycles(%.1f)", waveform, period, cycles);
 
     send_lifx_set_waveform(transient, hue, saturation, brightness, kelvin, period, cycles, skew_ratio, waveform);
+  } else if (strcmp(output_name_item->valuestring, "run_firecracker") == 0) {
+    ESP_LOGI(LOG_TAG, "run_firecracker call received");
+
+  
+    uint16_t hue = 10923; 
+    uint16_t saturation = 65535; 
+
+    auto hueObj = cJSON_GetObjectItem(args, "hue");
+    if (hueObj != nullptr) {
+      hue = hueObj->valueint;
+    }
+
+    auto saturationObj = cJSON_GetObjectItem(args, "saturation");
+    if (saturationObj != nullptr) {
+      saturation = saturationObj->valueint;
+    }
+
+    ESP_LOGI(LOG_TAG, "Starting firecracker task with H:%d, S:%d", hue, saturation);
+    reflect_start_firecracker_task(hue, saturation);
   }
+
 
   cJSON_Delete(args);
   cJSON_Delete(root);
