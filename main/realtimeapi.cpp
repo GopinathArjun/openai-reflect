@@ -18,20 +18,64 @@ typedef struct {
 void firecracker_task(void *params) {
     firecracker_params_t *p = (firecracker_params_t *)params;
 
-    ESP_LOGI(LOG_TAG, "Firecracker Task: 1. Launching...");
-    send_lifx_set_waveform(false, p->hue, p->saturation, 65535, 3500, 1500, 1.0, 0, 0); 
-    vTaskDelay(pdMS_TO_TICKS(1500)); 
+    send_lifx_set_power(false, 0);
+    vTaskDelay(pdMS_TO_TICKS(50));
+    send_lifx_set_power(true, 100); 
 
-    ESP_LOGI(LOG_TAG, "Firecracker Task: 2. Explosion!");
-    send_lifx_set_color(0, 0, 65535, 5500, 100);
-    vTaskDelay(pdMS_TO_TICKS(100)); 
+    ESP_LOGI(LOG_TAG, "Firecracker Task: 1. Launch (triangle)...");
+    //send_lifx_set_waveform(true,p->hue, p->saturation,65535,3500,900,1.0f,0,3);
+    //send_lifx_set_waveform(true,10923, 65535,65535,3500,900,1.0f,0,3);
+    send_lifx_set_waveform(true,0, 0,20000,4000,2000,1.5f,0,3);
+    vTaskDelay(pdMS_TO_TICKS(3000));
 
-    ESP_LOGI(LOG_TAG, "Firecracker Task: 3. Embers...");
-    send_lifx_set_color(0, 65535, 15000, 3500, 4000);
-  
+    ESP_LOGI(LOG_TAG, "Firecracker Task: 2. Explosion (pulse)!");
+    send_lifx_set_waveform(true,p->hue,p->saturation,65535,3500,200,2.0f,0,4);
+    vTaskDelay(pdMS_TO_TICKS(250));
+
+    uint16_t ember_h = (uint16_t)((p->hue + (uint16_t)(65535.0f * 15.0f / 360.0f)) % 65535);
+    uint16_t ember_s1 = (uint16_t)((float)p->saturation * 0.80f);
+    uint16_t ember_s2 = (uint16_t)((float)p->saturation * 0.90f);
+    uint16_t ember_s3 = (uint16_t)((float)p->saturation * 0.50f);
+
+    ESP_LOGI(LOG_TAG, "Firecracker embers started ");
+    send_lifx_set_waveform(false,ember_h,ember_s1,35000, 3500, 600, 1.0f, 0,2);
+    vTaskDelay(pdMS_TO_TICKS(1100));
+
+    ESP_LOGI(LOG_TAG, "embers next");
+    send_lifx_set_waveform(true,ember_h,ember_s2,28000,3500,150,6.0f,16383,4);
+    vTaskDelay(pdMS_TO_TICKS(1700));
+
+    ESP_LOGI(LOG_TAG, "fading embers");
+    send_lifx_set_waveform(false,ember_h,ember_s3,8000,3500,1800,1.0f,0,2);
+    vTaskDelay(pdMS_TO_TICKS(3200));
+
+    send_lifx_set_power(false, 600);
+
     free(p);
     vTaskDelete(NULL);
 }
+
+void diwali_lights_task(void *params) {
+    ESP_LOGI(LOG_TAG, "Diwali Lights Task: Starting...");
+    send_lifx_set_power(true, 500); 
+    send_lifx_set_color(8192, 65535, 50000, 3500, 1000);
+    vTaskDelay(pdMS_TO_TICKS(1200));
+
+    bool transient = true;        
+    uint16_t hue = 8192;          
+    uint16_t saturation = 65535;  
+    uint16_t brightness = 65535;  
+    uint16_t kelvin = 3500;
+    uint32_t period = 1000;       
+    float cycles = 3600.0f;      
+    
+    int16_t skew_ratio = -16383;
+    uint8_t waveform = 4;
+
+    ESP_LOGI(LOG_TAG, "Diwali Lights have started.");
+    send_lifx_set_waveform(transient, hue, saturation, brightness, kelvin, period, cycles, skew_ratio, waveform);
+    vTaskDelete(NULL);
+  }
 
 void reflect_start_firecracker_task(uint16_t hue, uint16_t saturation) {
     firecracker_params_t *params = (firecracker_params_t *)malloc(sizeof(firecracker_params_t));
@@ -195,6 +239,26 @@ void add_run_firecracker(cJSON *tools) {
   assert(cJSON_AddItemToArray(tools, tool));
 }
 
+void add_run_diwali_lights(cJSON *tools) {
+  auto tool = cJSON_CreateObject();
+  assert(tool != nullptr);
+
+  assert(cJSON_AddStringToObject(tool, "type", "function") != nullptr);
+  assert(cJSON_AddStringToObject(tool, "name", "run_diwali_lights") != nullptr);
+  assert(cJSON_AddStringToObject(
+             tool, "description",
+             "Golden sparkling 'Diwali' lighting effect for 60 minutes or until when another commd is given.") != nullptr);
+  
+  auto parameters = cJSON_CreateObject();
+  assert(parameters != nullptr);
+  assert(cJSON_AddItemToObject(tool, "parameters", parameters));
+  assert(cJSON_AddStringToObject(parameters, "type", "object") != nullptr);
+  auto properties = cJSON_AddObjectToObject(parameters, "properties");
+  assert(properties != nullptr);
+
+  assert(cJSON_AddItemToArray(tools, tool));
+}
+
 void send_session_update(PeerConnection *peer_connection) {
   std:: string kLunaInstructions(
     reinterpret_cast<const char*>(_binary_oai_instructions_txt_start),_binary_oai_instructions_txt_end - _binary_oai_instructions_txt_start);
@@ -217,6 +281,7 @@ void send_session_update(PeerConnection *peer_connection) {
   add_set_color(tools);
   add_set_waveform(tools);
   add_run_firecracker(tools);
+  add_run_diwali_lights(tools);
 
   assert(cJSON_AddItemToObject(root, "session", session));
 
@@ -379,8 +444,10 @@ void realtimeapi_parse_incoming(char *msg) {
 
     ESP_LOGI(LOG_TAG, "Starting firecracker task with H:%d, S:%d", hue, saturation);
     reflect_start_firecracker_task(hue, saturation);
+  } else if (strcmp(output_name_item->valuestring, "run_diwali_lights") == 0) {
+    ESP_LOGI(LOG_TAG, "run_diwali_lights call received");
+    xTaskCreate(diwali_lights_task, "diwali_lights_task", 4096, NULL, 5, NULL);
   }
-
 
   cJSON_Delete(args);
   cJSON_Delete(root);
