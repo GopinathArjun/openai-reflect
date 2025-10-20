@@ -10,6 +10,20 @@
 extern const uint8_t _binary_oai_instructions_txt_start[] asm("_binary_oai_instructions_txt_start");
 extern const uint8_t _binary_oai_instructions_txt_end[] asm("_binary_oai_instructions_txt_end");
 
+// sandhya's preferred standard lights
+/* Found using lifx lan:attr IP ADDRESS GetColor 
+{"brightness": 1.0, "hue": 41.46, "kelvin": 3500, "label": "lifex1", "power": 65535, "reserved6": "0000", "reserved7": "0000000000000000", "saturation": 0.131}*/
+const uint16_t DEFAULT_HUE = 7547;
+const uint16_t DEFAULT_SATURATION = 8585;
+const uint16_t DEFAULT_BRIGHTNESS = 65535;
+const uint16_t DEFAULT_KELVIN = 3500;
+
+void set_default_light_state(uint32_t duration) {
+    ESP_LOGI(LOG_TAG, "Returning to default lights");
+    send_lifx_set_power(true, duration);
+    send_lifx_set_color(DEFAULT_HUE, DEFAULT_SATURATION, DEFAULT_BRIGHTNESS, DEFAULT_KELVIN, duration);
+}
+
 typedef struct {
     uint16_t hue;
     uint16_t saturation;
@@ -49,7 +63,7 @@ void firecracker_task(void *params) {
     send_lifx_set_waveform(false,ember_h,ember_s3,8000,3500,1800,1.0f,0,2);
     vTaskDelay(pdMS_TO_TICKS(3200));
 
-    send_lifx_set_power(false, 600);
+    set_default_light_state(1000);
 
     free(p);
     vTaskDelete(NULL);
@@ -57,8 +71,7 @@ void firecracker_task(void *params) {
 
 void diwali_lights_task(void *params) {
     ESP_LOGI(LOG_TAG, "Diwali Lights Task: Starting...");
-    send_lifx_set_power(true, 500); 
-    send_lifx_set_color(8192, 65535, 50000, 3500, 1000);
+    
     vTaskDelay(pdMS_TO_TICKS(1200));
 
     bool transient = true;        
@@ -66,14 +79,36 @@ void diwali_lights_task(void *params) {
     uint16_t saturation = 65535;  
     uint16_t brightness = 65535;  
     uint16_t kelvin = 3500;
-    uint32_t period = 1000;       
+    uint32_t period = 2000;       
     float cycles = 3600.0f;      
     
-    int16_t skew_ratio = -16383;
+    int16_t skew_ratio = 16383;
     uint8_t waveform = 4;
 
     ESP_LOGI(LOG_TAG, "Diwali Lights have started.");
     send_lifx_set_waveform(transient, hue, saturation, brightness, kelvin, period, cycles, skew_ratio, waveform);
+    
+    vTaskDelete(NULL);
+  }
+
+  void diwali_second_sequence_task(void *params) {
+    ESP_LOGI(LOG_TAG, "Diwali Second one Starting...");
+
+    //set_default_light_state(1000);
+    vTaskDelay(pdMS_TO_TICKS(500));
+
+    uint16_t hues[] = {21845, 10922, 5461, 0}; 
+    uint16_t saturation = 65535; 
+    uint16_t brightness = 60000; 
+    uint16_t kelvin = 3500;
+    for (int i = 0; i < 900; i++) {
+        // Loop through the four  colors
+        for (uint16_t hue : hues) {
+            send_lifx_set_color(hue, saturation, brightness, kelvin, 0);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+        }
+      }
+    set_default_light_state(1000);
     vTaskDelete(NULL);
   }
 
@@ -259,6 +294,26 @@ void add_run_diwali_lights(cJSON *tools) {
   assert(cJSON_AddItemToArray(tools, tool));
 }
 
+void add_run_diwali_second_sequence(cJSON *tools) {
+  auto tool = cJSON_CreateObject();
+  assert(tool != nullptr);
+
+  assert(cJSON_AddStringToObject(tool, "type", "function") != nullptr);
+  assert(cJSON_AddStringToObject(tool, "name", "run_diwali_second_sequence") != nullptr);
+  assert(cJSON_AddStringToObject(
+             tool, "description",
+             "Cycles through green, yellow, orange, and red lights for one hour.") != nullptr);
+  
+  auto parameters = cJSON_CreateObject();
+  assert(parameters != nullptr);
+  assert(cJSON_AddItemToObject(tool, "parameters", parameters));
+  assert(cJSON_AddStringToObject(parameters, "type", "object") != nullptr);
+  auto properties = cJSON_AddObjectToObject(parameters, "properties");
+  assert(properties != nullptr); 
+
+  assert(cJSON_AddItemToArray(tools, tool));
+}
+
 void send_session_update(PeerConnection *peer_connection) {
   std:: string kLunaInstructions(
     reinterpret_cast<const char*>(_binary_oai_instructions_txt_start),_binary_oai_instructions_txt_end - _binary_oai_instructions_txt_start);
@@ -282,6 +337,7 @@ void send_session_update(PeerConnection *peer_connection) {
   add_set_waveform(tools);
   add_run_firecracker(tools);
   add_run_diwali_lights(tools);
+  add_run_diwali_second_sequence(tools); 
 
   assert(cJSON_AddItemToObject(root, "session", session));
 
@@ -447,6 +503,9 @@ void realtimeapi_parse_incoming(char *msg) {
   } else if (strcmp(output_name_item->valuestring, "run_diwali_lights") == 0) {
     ESP_LOGI(LOG_TAG, "run_diwali_lights call received");
     xTaskCreate(diwali_lights_task, "diwali_lights_task", 4096, NULL, 5, NULL);
+  } else if (strcmp(output_name_item->valuestring, "run_diwali_second_sequence") == 0) {
+    ESP_LOGI(LOG_TAG, "run_diwali_second_sequence call received");
+    xTaskCreate(diwali_second_sequence_task, "diwali_second_sequence_task", 4096, NULL, 5, NULL);
   }
 
   cJSON_Delete(args);

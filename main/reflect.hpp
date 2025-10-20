@@ -15,6 +15,8 @@ void reflect_play_audio(uint8_t *, size_t);
 void reflect_send_audio(PeerConnection *, bool);
 void reflect_set_spin(bool);
 void reflect_wifi();
+void set_default_light_state(uint32_t duration);
+
 
 void send_lifx_set_color(uint16_t, uint16_t, uint16_t, uint16_t, uint32_t);
 void send_lifx_set_power(int, uint32_t);

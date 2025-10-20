@@ -5,6 +5,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <esp_log.h>
+#include "reflect.hpp"
 
 #define BROADCAST_IP "255.255.255.255"
 #define LIFX_PORT 56700
@@ -165,6 +166,6 @@ void reflect_lifx() {
   }
 
   inet_pton(AF_INET, BROADCAST_IP, &lifx_addr.sin_addr);
-  send_lifx_set_power(true, 7000);
-  send_lifx_set_color(9500, 65535, 65535, 3500,7000);
+  set_default_light_state(7000);
+
 }

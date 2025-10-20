@@ -93,7 +93,8 @@ void reflect_peer_connection_loop() {
                                          SDP_TYPE_ANSWER);
 
   reflect_set_spin(true);
-  send_lifx_set_power(true, 5000);
+  set_default_light_state(5000);
+
 
   while (true) {
     peer_connection_loop(peer_connection);
